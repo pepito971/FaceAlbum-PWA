@@ -33,7 +33,7 @@
   <p style="font-size:13px;color:#566579">Tu peux ajouter plusieurs lots de photos ou un dossier entier. Les images restent sur ton appareil.</p>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v13 — sélection simplifiée</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v14 — analyse par lots</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -103,6 +103,11 @@
     let urls = [];
     let photosAvecVisage = [];
     let analysesVisages = [];
+    const TAILLE_LOT = 20;
+    const MAX_APERCUS = 30;
+    let debutLot = 0;
+    let lotEnCours = [];
+    let analyseEnCours = false;
     const CLE_GROUPES = "facealbum-groupes-v1";
     let groupes = [];
 
@@ -184,6 +189,10 @@
     }
 
     function actualiserSelection() {
+      if (analyseEnCours) return;
+      debutLot = 0;
+      lotEnCours = [];
+      boutonAnalyser.textContent = "🔍 Analyser les photos";
       nettoyerApercus();
       photosAvecVisage = [];
       analysesVisages = [];
@@ -202,9 +211,15 @@
       const photos = photosCourantes();
       document.getElementById("message").textContent =
         photos.length ? photos.length + " photo(s) sélectionnée(s)." : "Aucune photo sélectionnée.";
-      photos.forEach((photo, index) => apercu.appendChild(vignette(photo, index, false)));
+      photos.slice(0, MAX_APERCUS).forEach((photo, index) => apercu.appendChild(vignette(photo, index, false)));
+      if (photos.length > MAX_APERCUS) {
+        const info = document.createElement("p");
+        info.textContent = "Aperçu limité aux " + MAX_APERCUS + " premières photos pour préserver la mémoire du téléphone. Les " + photos.length + " photos restent sélectionnées.";
+        apercu.appendChild(info);
+      }
     }
     function ajouterFichiers(input) {
+      if (analyseEnCours) { input.value = ""; return; }
       for (const fichier of input.files || []) {
         if (!fichier.type.startsWith("image/") && !/\.(jpe?g|png|webp|gif|heic|heif|bmp|avif)$/i.test(fichier.name)) continue;
         const cle = [fichier.webkitRelativePath || fichier.name, fichier.size, fichier.lastModified].join("|");
@@ -216,21 +231,28 @@
     champPhotos.addEventListener("change", () => ajouterFichiers(champPhotos));
     dossierPhotos.addEventListener("change", () => ajouterFichiers(dossierPhotos));
     document.getElementById("viderSelection").addEventListener("click", () => {
+      if (analyseEnCours) return;
       fichiersSelectionnes.clear();
       actualiserSelection();
     });
 
     boutonAnalyser.addEventListener("click", async () => {
-      const photos = photosCourantes();
+      const toutesLesPhotos = photosCourantes();
+      const photos = toutesLesPhotos.slice(debutLot, debutLot + TAILLE_LOT);
       if (!photos.length) {
         resultat.textContent = "Sélectionne d'abord des photos.";
         return;
       }
+      analyseEnCours = true;
       boutonAnalyser.disabled = true;
+      champPhotos.disabled = true;
+      dossierPhotos.disabled = true;
+      document.getElementById("viderSelection").disabled = true;
+      lotEnCours = photos;
       confirmation.hidden = true;
       choixPhotos.replaceChildren();
       reponse.textContent = "";
-      resultat.textContent = "Analyse en cours...";
+      resultat.textContent = "Analyse du lot : photos " + (debutLot + 1) + " à " + (debutLot + photos.length) + " sur " + toutesLesPhotos.length + "...";
       etatIA.textContent = "🧠 IA visuelle : préparation après détection des visages...";
       photosAvecVisage = [];
       analysesVisages = [];
@@ -243,7 +265,8 @@
       try {
         let total = 0;
         for (let i = 0; i < photos.length; i++) {
-          resultat.textContent = "Analyse en cours : " + (i + 1) + "/" + photos.length;
+          resultat.textContent = "Détection : " + (debutLot + i + 1) + "/" + toutesLesPhotos.length + " (lot de " + photos.length + ")";
+          if (i % 3 === 0) await new Promise(resolve => setTimeout(resolve, 0));
           const analyse = await detecterVisages(photos[i]);
           total += analyse.nombre;
           if (analyse.nombre > 0) {
@@ -251,7 +274,7 @@
             analysesVisages.push({photo: photos[i], index: i, visages: analyse.visages});
           }
         }
-        resultat.textContent = total + " visage(s) détecté(s) dans " + photos.length + " photo(s).";
+        resultat.textContent = total + " visage(s) détecté(s) dans ce lot de " + photos.length + " photo(s).";
         {
           photos.forEach((photo, index) =>
             choixPhotos.appendChild(vignette(photo, index, true)));
@@ -483,7 +506,16 @@
       } catch (erreur) {
         resultat.textContent = "Erreur d'analyse : " + erreur.message;
       } finally {
+        debutLot += photos.length;
+        analyseEnCours = false;
         boutonAnalyser.disabled = false;
+        champPhotos.disabled = false;
+        dossierPhotos.disabled = false;
+        document.getElementById("viderSelection").disabled = false;
+        boutonAnalyser.textContent = debutLot < toutesLesPhotos.length
+          ? "▶️ Analyser les " + Math.min(TAILLE_LOT, toutesLesPhotos.length - debutLot) + " photos suivantes"
+          : "🔄 Recommencer l’analyse";
+        if (debutLot >= toutesLesPhotos.length) debutLot = 0;
       }
     });
 
@@ -495,7 +527,7 @@
         return;
       }
       const nom = document.getElementById("nomGroupe").value.trim() || "Groupe sans nom";
-      const photos = photosCourantes();
+      const photos = lotEnCours;
       const groupe = {
         nom,
         type: document.getElementById("typeGroupe").value,
