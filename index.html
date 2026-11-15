@@ -53,11 +53,7 @@
 document.getElementById("analyser")
   .addEventListener("click", function () {
 
-if (!("FaceDetector" in window)) {
-  document.getElementById("resultat").textContent =
-    "Détection non disponible sur ce navigateur.";
-  return;
-}
+
 
     const photos = document.getElementById("photos").files;
     const resultat = document.getElementById("resultat");
