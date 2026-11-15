@@ -1,9 +1,14 @@
 // FaceAlbum - Reconnaissance des personnes
 
-// Cette fonction préparera la comparaison des visages.
 async function reconnaitrePersonnes(photos) {
-  console.log("Préparation de la reconnaissance...");
-  console.log("Nombre de photos :", photos.length);
+  console.log("Reconnaissance en préparation...");
+  console.log("Photos sélectionnées :", photos.length);
 
-  return [];
+  const groupes = [];
+
+  return {
+    groupes: groupes,
+    nombrePhotos: photos.length,
+    reconnaissanceActive: false
+  };
 }
