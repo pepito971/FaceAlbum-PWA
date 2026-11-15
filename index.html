@@ -46,6 +46,7 @@
   <script>
     document.getElementById("photos")
       .addEventListener("change", function () {
+const count = this.files.length;
         const apercu = document.getElementById("apercu");
 apercu.innerHTML = "";
 
