@@ -26,7 +26,7 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v8 — ressemblances IA</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v9 — groupes de scènes</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -226,8 +226,9 @@
               });
               suggestionsScenes = propositionsIA.groupes;
               comparaisonsIA = propositionsIA.comparaisons || [];
+              suggestionsScenes = [...(propositionsIA.pistesGroupes || []), ...suggestionsScenes];
               etatIA.textContent = "✅ IA visuelle terminée : " + photos.length +
-                " photo(s) comparée(s), " + suggestionsScenes.length + " suggestion(s) de scène.";
+                " photo(s) comparée(s), " + suggestionsScenes.length + " piste(s) de groupe à examiner.";
             } catch (erreurIA) {
               console.warn("Modèle IA indisponible", erreurIA);
               const detail = String(erreurIA?.message || erreurIA).slice(0, 180);
@@ -254,7 +255,8 @@
             const ligne = document.createElement("div");
             const description = document.createElement("p");
             description.textContent = "Suggestion " + (numero + 1) + " (" + raison + ") : " +
-              indices.map(i => "photo " + (i + 1)).join(", ");
+              indices.map(i => "photo " + (i + 1)).join(", ") +
+              (indices.length >= 3 ? " — groupe de " + indices.length + " photos" : "");
             const bouton = document.createElement("button");
             bouton.type = "button";
             bouton.textContent = "Examiner cette suggestion";
