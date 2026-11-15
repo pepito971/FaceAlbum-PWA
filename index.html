@@ -26,7 +26,7 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v7 — diagnostic IA</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v8 — ressemblances IA</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -36,6 +36,7 @@
     <h3>🧠 Suggestions de photos proches</h3>
     <p>Suggestions par intelligence artificielle locale : sujets, scènes et apparences visibles. Elles ne prouvent pas qu'il s'agit de la même personne. Vérifie toujours avant de confirmer.</p>
     <div id="listeSuggestions"></div>
+    <div id="comparaisonsIA"></div>
   </section>
   <section id="confirmation" hidden>
     <h3>👥 Créer un groupe de photos</h3>
@@ -157,6 +158,7 @@
       analysesVisages = [];
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
+      document.getElementById("comparaisonsIA").replaceChildren();
       confirmation.hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
@@ -183,6 +185,7 @@
       analysesVisages = [];
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
+      document.getElementById("comparaisonsIA").replaceChildren();
       try {
         let total = 0;
         for (let i = 0; i < photos.length; i++) {
@@ -210,6 +213,7 @@
           }
 
           let suggestionsScenes = [];
+          let comparaisonsIA = [];
           let repli = false;
           if (typeof suggererAvecIA !== "function") {
             etatIA.textContent = "❌ Module d'IA absent ou ancienne version en cache. Ferme et rouvre FaceAlbum.";
@@ -221,6 +225,7 @@
                 etatIA.textContent = "🧠 " + message;
               });
               suggestionsScenes = propositionsIA.groupes;
+              comparaisonsIA = propositionsIA.comparaisons || [];
               etatIA.textContent = "✅ IA visuelle terminée : " + photos.length +
                 " photo(s) comparée(s), " + suggestionsScenes.length + " suggestion(s) de scène.";
             } catch (erreurIA) {
@@ -263,7 +268,39 @@
             ligne.append(description, bouton);
             zone.appendChild(ligne);
           });
-          document.getElementById("suggestions").hidden = !suggestions.length;
+
+          const zoneComparaisons = document.getElementById("comparaisonsIA");
+          if (comparaisonsIA.length) {
+            const titre = document.createElement("h4");
+            titre.textContent = "🔎 Meilleures ressemblances détectées";
+            const explication = document.createElement("p");
+            explication.textContent = "Score de similarité mathématique : ce n'est pas une probabilité d'identité. Vérifie avant de confirmer.";
+            zoneComparaisons.append(titre, explication);
+            comparaisonsIA.slice(0, 5).forEach(({indices, score}) => {
+              const ligne = document.createElement("div");
+              ligne.style.cssText = "padding:10px;margin:8px auto;border:1px solid #ccd7e8;border-radius:12px;max-width:450px";
+              const noms = document.createElement("p");
+              noms.textContent = "Photos " + (indices[0] + 1) + " et " +
+                (indices[1] + 1) + " — score visuel : " +
+                (score * 100).toFixed(1) + "/100";
+              const images = document.createElement("div");
+              images.className = "photos";
+              indices.forEach(i => images.appendChild(vignette(photos[i], i, false)));
+              const bouton = document.createElement("button");
+              bouton.type = "button";
+              bouton.textContent = "Examiner ces deux photos";
+              bouton.addEventListener("click", () => {
+                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  c.checked = indices.includes(Number(c.value));
+                });
+                reponse.textContent = "Ressemblance visuelle seulement : vérifie avant de créer le groupe.";
+                confirmation.scrollIntoView({behavior: "smooth"});
+              });
+              ligne.append(noms, images, bouton);
+              zoneComparaisons.appendChild(ligne);
+            });
+          }
+          document.getElementById("suggestions").hidden = !suggestions.length && !comparaisonsIA.length;
           if (!suggestions.length) resultat.textContent +=
             " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
         }
