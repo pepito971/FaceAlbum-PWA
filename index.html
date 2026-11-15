@@ -63,8 +63,25 @@ document.getElementById("analyser")
       return;
     }
 
-    resultat.textContent =
-      "Prêt à analyser " + photos.length + " photo(s).";
+    
+resultat.textContent = "Analyse en cours...";
+
+try {
+  let totalVisages = 0;
+
+  for (const photo of photos) {
+    const analyse = await detecterVisages(photo);
+    totalVisages += analyse.nombre;
+  }
+
+  resultat.textContent =
+    totalVisages + " visage(s) détecté(s) dans " +
+    photos.length + " photo(s).";
+} catch (erreur) {
+  resultat.textContent =
+    "Erreur d'analyse : " + erreur.message;
+}
+
   });
 
   </script>
