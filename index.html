@@ -23,10 +23,17 @@
 <body>
   <h1>📸 FaceAlbum</h1>
   <p>Organise tes photos par personne.</p>
-  <input type="file" id="photos" accept="image/*" multiple>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center">
+    <label for="photos" style="background:#2457a7;color:white;padding:12px;border-radius:12px;cursor:pointer">📷 Ajouter des photos</label>
+    <input type="file" id="photos" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0">
+    <label for="dossierPhotos" style="background:#2457a7;color:white;padding:12px;border-radius:12px;cursor:pointer">📁 Choisir un dossier</label>
+    <input type="file" id="dossierPhotos" accept="image/*" webkitdirectory directory multiple style="position:absolute;width:1px;height:1px;opacity:0">
+    <button id="viderSelection" type="button">Effacer la sélection</button>
+  </div>
+  <p style="font-size:13px;color:#566579">Tu peux ajouter plusieurs lots de photos ou un dossier entier. Les images restent sur ton appareil.</p>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v12 — personnes entre scènes différentes</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v13 — sélection simplifiée</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -83,6 +90,9 @@
   <script src="./corps.js"></script>
   <script>
     const champPhotos = document.getElementById("photos");
+    const dossierPhotos = document.getElementById("dossierPhotos");
+    const fichiersSelectionnes = new Map();
+    const photosCourantes = () => Array.from(fichiersSelectionnes.values());
     const apercu = document.getElementById("apercu");
     const choixPhotos = document.getElementById("choixPhotos");
     const confirmation = document.getElementById("confirmation");
@@ -173,7 +183,7 @@
       return boite;
     }
 
-    champPhotos.addEventListener("change", () => {
+    function actualiserSelection() {
       nettoyerApercus();
       photosAvecVisage = [];
       analysesVisages = [];
@@ -189,14 +199,29 @@
       reponse.textContent = "";
       resultat.textContent = "";
       etatIA.textContent = "🧠 IA visuelle : pas encore lancée.";
-      const photos = Array.from(champPhotos.files);
+      const photos = photosCourantes();
       document.getElementById("message").textContent =
         photos.length ? photos.length + " photo(s) sélectionnée(s)." : "Aucune photo sélectionnée.";
       photos.forEach((photo, index) => apercu.appendChild(vignette(photo, index, false)));
+    }
+    function ajouterFichiers(input) {
+      for (const fichier of input.files || []) {
+        if (!fichier.type.startsWith("image/") && !/\.(jpe?g|png|webp|gif|heic|heif|bmp|avif)$/i.test(fichier.name)) continue;
+        const cle = [fichier.webkitRelativePath || fichier.name, fichier.size, fichier.lastModified].join("|");
+        fichiersSelectionnes.set(cle, fichier);
+      }
+      input.value = "";
+      actualiserSelection();
+    }
+    champPhotos.addEventListener("change", () => ajouterFichiers(champPhotos));
+    dossierPhotos.addEventListener("change", () => ajouterFichiers(dossierPhotos));
+    document.getElementById("viderSelection").addEventListener("click", () => {
+      fichiersSelectionnes.clear();
+      actualiserSelection();
     });
 
     boutonAnalyser.addEventListener("click", async () => {
-      const photos = Array.from(champPhotos.files);
+      const photos = photosCourantes();
       if (!photos.length) {
         resultat.textContent = "Sélectionne d'abord des photos.";
         return;
@@ -470,7 +495,7 @@
         return;
       }
       const nom = document.getElementById("nomGroupe").value.trim() || "Groupe sans nom";
-      const photos = Array.from(champPhotos.files);
+      const photos = photosCourantes();
       const groupe = {
         nom,
         type: document.getElementById("typeGroupe").value,
