@@ -29,6 +29,11 @@
   <h3>📸 Photos sélectionnées</h3>
   <div id="apercu" class="photos"></div>
 
+  <section id="suggestions" hidden>
+    <h3>🧠 Suggestions de photos proches</h3>
+    <p>Comparaison locale expérimentale : elle repère surtout des visages sur des photos très similaires. Elle ne prouve pas qu'il s'agit de la même personne.</p>
+    <div id="listeSuggestions"></div>
+  </section>
   <section id="confirmation" hidden>
     <h3>👥 Créer un groupe de photos</h3>
     <p><strong>Étape de test :</strong> la reconnaissance automatique des personnes n'est pas encore disponible.</p>
@@ -61,6 +66,7 @@
     const boutonAnalyser = document.getElementById("analyser");
     let urls = [];
     let photosAvecVisage = [];
+    let analysesVisages = [];
     const CLE_GROUPES = "facealbum-groupes-v1";
     let groupes = [];
 
@@ -143,6 +149,9 @@
     champPhotos.addEventListener("change", () => {
       nettoyerApercus();
       photosAvecVisage = [];
+      analysesVisages = [];
+      document.getElementById("suggestions").hidden = true;
+      document.getElementById("listeSuggestions").replaceChildren();
       confirmation.hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
@@ -164,19 +173,52 @@
       reponse.textContent = "";
       resultat.textContent = "Analyse en cours...";
       photosAvecVisage = [];
+      analysesVisages = [];
+      document.getElementById("suggestions").hidden = true;
+      document.getElementById("listeSuggestions").replaceChildren();
       try {
         let total = 0;
         for (let i = 0; i < photos.length; i++) {
           resultat.textContent = "Analyse en cours : " + (i + 1) + "/" + photos.length;
           const analyse = await detecterVisages(photos[i]);
           total += analyse.nombre;
-          if (analyse.nombre > 0) photosAvecVisage.push({photo: photos[i], index: i});
+          if (analyse.nombre > 0) {
+            photosAvecVisage.push({photo: photos[i], index: i});
+            analysesVisages.push({photo: photos[i], index: i, visages: analyse.visages});
+          }
         }
         resultat.textContent = total + " visage(s) détecté(s) dans " + photos.length + " photo(s).";
         if (photosAvecVisage.length) {
           photosAvecVisage.forEach(({photo, index}) =>
             choixPhotos.appendChild(vignette(photo, index, true)));
           confirmation.hidden = false;
+          try {
+            const propositions = await reconnaitrePersonnes(analysesVisages);
+            const zone = document.getElementById("listeSuggestions");
+            propositions.groupes.forEach((indices, numero) => {
+              const ligne = document.createElement("div");
+              const description = document.createElement("p");
+              description.textContent = "Suggestion " + (numero + 1) + " : " +
+                indices.map(i => "photo " + (i + 1)).join(", ");
+              const bouton = document.createElement("button");
+              bouton.type = "button";
+              bouton.textContent = "Examiner cette suggestion";
+              bouton.addEventListener("click", () => {
+                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  c.checked = indices.includes(Number(c.value));
+                });
+                reponse.textContent = "Vérifie les photos cochées avant de confirmer le groupe.";
+                confirmation.scrollIntoView({behavior: "smooth"});
+              });
+              ligne.append(description, bouton);
+              zone.appendChild(ligne);
+            });
+            document.getElementById("suggestions").hidden = !propositions.groupes.length;
+            if (!propositions.groupes.length) resultat.textContent +=
+              " Aucune ressemblance forte proposée : le regroupement manuel reste disponible.";
+          } catch (erreur) {
+            console.warn("Suggestions indisponibles", erreur);
+          }
         } else {
           resultat.textContent += " Aucun groupe à préparer.";
         }
