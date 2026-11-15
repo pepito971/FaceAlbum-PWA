@@ -52,6 +52,19 @@
 
   <p id="reponseConfirmation"></p>
 </div>
+  <script>
+function confirmerGroupe(reponse) {
+  const message = document.getElementById("reponseConfirmation");
+
+  if (reponse === "Oui") {
+    message.textContent = "✅ Groupe confirmé !";
+  } else if (reponse === "Non") {
+    message.textContent = "❌ Groupe refusé.";
+  } else {
+    message.textContent = "⏳ Groupe mis en attente.";
+  }
+}
+</script>
 <script src="./detection.js"></script>
   <script>
     document.getElementById("photos")
