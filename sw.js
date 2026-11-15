@@ -1,10 +1,11 @@
-const CACHE_NAME = "facealbum-v5";
+const CACHE_NAME = "facealbum-v6";
 const FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./detection.js",
-  "./reconnaissance.js"
+  "./reconnaissance.js",
+  "./analyse-ia.js"
 ];
 
 self.addEventListener("install", event => {
