@@ -49,6 +49,21 @@
         document.getElementById("message")
           .textContent = count + " photo(s) sélectionnée(s).";
       });
+
+document.getElementById("analyser")
+  .addEventListener("click", function () {
+    const photos = document.getElementById("photos").files;
+    const resultat = document.getElementById("resultat");
+
+    if (photos.length === 0) {
+      resultat.textContent = "Sélectionne d'abord des photos.";
+      return;
+    }
+
+    resultat.textContent =
+      "Prêt à analyser " + photos.length + " photo(s).";
+  });
+
   </script>
 
 <script>
