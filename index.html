@@ -32,7 +32,7 @@
 
   <section id="suggestions" hidden>
     <h3>🧠 Suggestions de photos proches</h3>
-    <p>Comparaison locale expérimentale des visages, scènes et apparences, y compris les silhouettes visibles. Elle ne permet pas encore d'identifier fiablement une personne.</p>
+    <p>Suggestions par intelligence artificielle locale : sujets, scènes et apparences visibles. Elles ne prouvent pas qu'il s'agit de la même personne. Vérifie toujours avant de confirmer.</p>
     <div id="listeSuggestions"></div>
   </section>
   <section id="confirmation" hidden>
@@ -57,6 +57,7 @@
 
   <script src="./detection.js"></script>
   <script src="./reconnaissance.js"></script>
+  <script src="./analyse-ia.js"></script>
   <script>
     const champPhotos = document.getElementById("photos");
     const apercu = document.getElementById("apercu");
@@ -198,8 +199,24 @@
             const zone = document.getElementById("listeSuggestions");
             const suggestionsVisages = propositions.groupes.map(indices =>
               ({indices, raison: "visages très similaires"}));
-            const suggestionsScenes = await suggererScenesEtApparences(photos);
-            const suggestions = [...suggestionsVisages, ...suggestionsScenes];
+            let suggestionsScenes = [];
+            try {
+              const propositionsIA = await suggererAvecIA(photos, message => {
+                resultat.textContent = message;
+              });
+              suggestionsScenes = propositionsIA.groupes;
+              resultat.textContent = total + " visage(s) détecté(s) dans " +
+                photos.length + " photo(s). Analyse visuelle IA terminée.";
+            } catch (erreurIA) {
+              console.warn("Modèle IA indisponible, repli sur la comparaison simple", erreurIA);
+              resultat.textContent = total + " visage(s) détecté(s). Modèle IA indisponible : " +
+                "comparaison visuelle simple utilisée.";
+              suggestionsScenes = await suggererScenesEtApparences(photos);
+            }
+            const suggestions = [...suggestionsVisages, ...suggestionsScenes]
+              .filter((s, i, toutes) => toutes.findIndex(t =>
+                t.indices.length === s.indices.length &&
+                t.indices.every(k => s.indices.includes(k))) === i);
             suggestions.forEach(({indices, raison}, numero) => {
               const ligne = document.createElement("div");
               const description = document.createElement("p");
@@ -220,7 +237,7 @@
             });
             document.getElementById("suggestions").hidden = !suggestions.length;
             if (!suggestions.length) resultat.textContent +=
-              " Aucune ressemblance forte proposée : le regroupement manuel reste disponible.";
+              " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
           } catch (erreur) {
             console.warn("Suggestions indisponibles", erreur);
           }
