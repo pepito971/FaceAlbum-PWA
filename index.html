@@ -42,6 +42,16 @@
 <p id="resultat"></p>
 <h3>📸 Photos sélectionnées</h3>
 <div id="apercu" style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;"></div>
+  <div id="confirmation" style="display:none; margin-top:25px;">
+  <h3>👥 Confirmation des photos</h3>
+  <p>Ces photos correspondent-elles à la même personne ?</p>
+
+  <button type="button" onclick="confirmerGroupe('Oui')">✅ Oui</button>
+  <button type="button" onclick="confirmerGroupe('Non')">❌ Non</button>
+  <button type="button" onclick="confirmerGroupe('Plus tard')">⏳ Plus tard</button>
+
+  <p id="reponseConfirmation"></p>
+</div>
 <script src="./detection.js"></script>
   <script>
     document.getElementById("photos")
