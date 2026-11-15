@@ -46,7 +46,22 @@
   <script>
     document.getElementById("photos")
       .addEventListener("change", function () {
-        const count = this.files.length;
+        const apercu = document.getElementById("apercu");
+apercu.innerHTML = "";
+
+for (const photo of this.files) {
+    const image = document.createElement("img");
+    const url = URL.createObjectURL(photo);
+
+    image.src = url;
+    image.style.width = "100px";
+    image.style.height = "100px";
+    image.style.objectFit = "cover";
+    image.style.borderRadius = "10px";
+
+    image.onload = () => URL.revokeObjectURL(url);
+    apercu.appendChild(image);
+}
         document.getElementById("message")
           .textContent = count + " photo(s) sélectionnée(s).";
       });
