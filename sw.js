@@ -1,29 +1,38 @@
-
-const CACHE_NAME = "facealbum-v1";
-
+const CACHE_NAME = "facealbum-v2";
 const FILES = [
   "./",
   "./index.html",
-  "./manifest.webmanifest"
+  "./manifest.webmanifest",
+  "./detection.js",
+  "./reconnaissance.js"
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(FILES))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(FILES)));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      caches.keys().then(names =>
+        Promise.all(names.filter(name => name.startsWith("facealbum-") && name !== CACHE_NAME)
+          .map(name => caches.delete(name)))
+      ),
+      self.clients.claim()
+    ])
+  );
 });
 
 self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
-
+  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
+    fetch(event.request).then(response => {
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+      }
+      return response;
+    }).catch(() => caches.match(event.request))
   );
 });
