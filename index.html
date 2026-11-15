@@ -326,7 +326,39 @@
               zoneComparaisons.appendChild(ligne);
             });
           }
-          document.getElementById("suggestions").hidden = !suggestions.length && !comparaisonsIA.length;
+
+          const zoneCorps = document.getElementById("comparaisonsCorps");
+          if (comparaisonsCorps.length) {
+            const titre = document.createElement("h4");
+            titre.textContent = "🧍 Ressemblances de corps et de vêtements";
+            const avertissement = document.createElement("p");
+            avertissement.textContent = "Scores de ressemblance visuelle, pas de reconnaissance certaine de la même personne.";
+            zoneCorps.append(titre, avertissement);
+            comparaisonsCorps.slice(0, 5).forEach(({indices, score}) => {
+              const ligne = document.createElement("div");
+              ligne.style.cssText = "padding:10px;margin:8px auto;border:1px solid #ccd7e8;border-radius:12px;max-width:450px";
+              const description = document.createElement("p");
+              description.textContent = "Photos " + (indices[0] + 1) + " et " +
+                (indices[1] + 1) + " — apparence : " + (score * 100).toFixed(1) + "/100";
+              const images = document.createElement("div");
+              images.className = "photos";
+              indices.forEach(i => images.appendChild(vignette(photos[i], i, false)));
+              const bouton = document.createElement("button");
+              bouton.type = "button";
+              bouton.textContent = "Examiner ces personnes";
+              bouton.addEventListener("click", () => {
+                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  c.checked = indices.includes(Number(c.value));
+                });
+                reponse.textContent = "Vérifie la ressemblance avant de confirmer.";
+                confirmation.scrollIntoView({behavior: "smooth"});
+              });
+              ligne.append(description, images, bouton);
+              zoneCorps.appendChild(ligne);
+            });
+          }
+          document.getElementById("suggestions").hidden =
+            !suggestions.length && !comparaisonsIA.length && !comparaisonsCorps.length;
           if (!suggestions.length) resultat.textContent +=
             " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
         }
