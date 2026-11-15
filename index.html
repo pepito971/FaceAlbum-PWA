@@ -26,6 +26,8 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
+  <p style="font-size:13px;color:#566579">FaceAlbum v7 — diagnostic IA</p>
+  <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
   <div id="apercu" class="photos"></div>
@@ -66,6 +68,7 @@
     const resultat = document.getElementById("resultat");
     const reponse = document.getElementById("reponseConfirmation");
     const boutonAnalyser = document.getElementById("analyser");
+    const etatIA = document.getElementById("etatIA");
     let urls = [];
     let photosAvecVisage = [];
     let analysesVisages = [];
@@ -157,6 +160,7 @@
       confirmation.hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
+      etatIA.textContent = "🧠 IA visuelle : pas encore lancée.";
       const photos = Array.from(champPhotos.files);
       document.getElementById("message").textContent =
         photos.length ? photos.length + " photo(s) sélectionnée(s)." : "Aucune photo sélectionnée.";
@@ -174,6 +178,7 @@
       choixPhotos.replaceChildren();
       reponse.textContent = "";
       resultat.textContent = "Analyse en cours...";
+      etatIA.textContent = "🧠 IA visuelle : préparation après détection des visages...";
       photosAvecVisage = [];
       analysesVisages = [];
       document.getElementById("suggestions").hidden = true;
@@ -194,53 +199,73 @@
           photos.forEach((photo, index) =>
             choixPhotos.appendChild(vignette(photo, index, true)));
           confirmation.hidden = false;
+          const zone = document.getElementById("listeSuggestions");
+          const suggestionsVisages = [];
           try {
             const propositions = await reconnaitrePersonnes(analysesVisages);
-            const zone = document.getElementById("listeSuggestions");
-            const suggestionsVisages = propositions.groupes.map(indices =>
-              ({indices, raison: "visages très similaires"}));
-            let suggestionsScenes = [];
+            suggestionsVisages.push(...propositions.groupes.map(indices =>
+              ({indices, raison: "visages très similaires (à vérifier)"})));
+          } catch (erreurVisages) {
+            console.warn("Comparaison des visages indisponible", erreurVisages);
+          }
+
+          let suggestionsScenes = [];
+          let repli = false;
+          if (typeof suggererAvecIA !== "function") {
+            etatIA.textContent = "❌ Module d'IA absent ou ancienne version en cache. Ferme et rouvre FaceAlbum.";
+            repli = true;
+          } else {
             try {
+              etatIA.textContent = "🧠 IA visuelle : chargement du modèle...";
               const propositionsIA = await suggererAvecIA(photos, message => {
-                resultat.textContent = message;
+                etatIA.textContent = "🧠 " + message;
               });
               suggestionsScenes = propositionsIA.groupes;
-              resultat.textContent = total + " visage(s) détecté(s) dans " +
-                photos.length + " photo(s). Analyse visuelle IA terminée.";
+              etatIA.textContent = "✅ IA visuelle terminée : " + photos.length +
+                " photo(s) comparée(s), " + suggestionsScenes.length + " suggestion(s) de scène.";
             } catch (erreurIA) {
-              console.warn("Modèle IA indisponible, repli sur la comparaison simple", erreurIA);
-              resultat.textContent = total + " visage(s) détecté(s). Modèle IA indisponible : " +
-                "comparaison visuelle simple utilisée.";
-              suggestionsScenes = await suggererScenesEtApparences(photos);
+              console.warn("Modèle IA indisponible", erreurIA);
+              const detail = String(erreurIA?.message || erreurIA).slice(0, 180);
+              etatIA.textContent = "⚠️ IA indisponible : " + detail +
+                " — essai de comparaison simple.";
+              repli = true;
             }
-            const suggestions = [...suggestionsVisages, ...suggestionsScenes]
-              .filter((s, i, toutes) => toutes.findIndex(t =>
-                t.indices.length === s.indices.length &&
-                t.indices.every(k => s.indices.includes(k))) === i);
-            suggestions.forEach(({indices, raison}, numero) => {
-              const ligne = document.createElement("div");
-              const description = document.createElement("p");
-              description.textContent = "Suggestion " + (numero + 1) + " (" + raison + ") : " +
-                indices.map(i => "photo " + (i + 1)).join(", ");
-              const bouton = document.createElement("button");
-              bouton.type = "button";
-              bouton.textContent = "Examiner cette suggestion";
-              bouton.addEventListener("click", () => {
-                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
-                  c.checked = indices.includes(Number(c.value));
-                });
-                reponse.textContent = "Vérifie les photos cochées avant de confirmer le groupe.";
-                confirmation.scrollIntoView({behavior: "smooth"});
-              });
-              ligne.append(description, bouton);
-              zone.appendChild(ligne);
-            });
-            document.getElementById("suggestions").hidden = !suggestions.length;
-            if (!suggestions.length) resultat.textContent +=
-              " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
-          } catch (erreur) {
-            console.warn("Suggestions indisponibles", erreur);
           }
+          if (repli) {
+            try {
+              suggestionsScenes = await suggererScenesEtApparences(photos);
+              etatIA.textContent += " Comparaison simple effectuée.";
+            } catch (erreurSimple) {
+              etatIA.textContent += " Comparaison simple indisponible : " +
+                String(erreurSimple?.message || erreurSimple).slice(0, 120);
+            }
+          }
+
+          const suggestions = [...suggestionsVisages, ...suggestionsScenes]
+            .filter((s, i, toutes) => toutes.findIndex(t =>
+              t.indices.length === s.indices.length &&
+              t.indices.every(k => s.indices.includes(k))) === i);
+          suggestions.forEach(({indices, raison}, numero) => {
+            const ligne = document.createElement("div");
+            const description = document.createElement("p");
+            description.textContent = "Suggestion " + (numero + 1) + " (" + raison + ") : " +
+              indices.map(i => "photo " + (i + 1)).join(", ");
+            const bouton = document.createElement("button");
+            bouton.type = "button";
+            bouton.textContent = "Examiner cette suggestion";
+            bouton.addEventListener("click", () => {
+              choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                c.checked = indices.includes(Number(c.value));
+              });
+              reponse.textContent = "Vérifie les photos cochées avant de confirmer le groupe.";
+              confirmation.scrollIntoView({behavior: "smooth"});
+            });
+            ligne.append(description, bouton);
+            zone.appendChild(ligne);
+          });
+          document.getElementById("suggestions").hidden = !suggestions.length;
+          if (!suggestions.length) resultat.textContent +=
+            " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
         }
       } catch (erreur) {
         resultat.textContent = "Erreur d'analyse : " + erreur.message;
