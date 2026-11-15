@@ -44,9 +44,9 @@
     <p id="reponseConfirmation" role="status" aria-live="polite"></p>
   </section>
   <section id="groupesCrees" hidden>
-    <h3>📁 Groupes confirmés (dans cette session)</h3>
+    <h3>📁 Groupes enregistrés sur cet appareil</h3>
     <ul id="listeGroupes"></ul>
-    <p>Les groupes sont seulement affichés ici : aucun fichier n'est déplacé ou renommé.</p>
+    <p>Seuls les noms et références des photos sont conservés sur cet appareil, pas les images. Pour les revoir, sélectionne à nouveau les photos. Aucun fichier n'est déplacé.</p>
   </section>
 
   <script src="./detection.js"></script>
@@ -61,7 +61,55 @@
     const boutonAnalyser = document.getElementById("analyser");
     let urls = [];
     let photosAvecVisage = [];
+    const CLE_GROUPES = "facealbum-groupes-v1";
     let groupes = [];
+
+    function chargerGroupes() {
+      try {
+        const valeur = JSON.parse(localStorage.getItem(CLE_GROUPES) || "[]");
+        groupes = Array.isArray(valeur) ? valeur.filter(g =>
+          g && typeof g.nom === "string" && Array.isArray(g.photos)) : [];
+      } catch (erreur) {
+        groupes = [];
+      }
+      afficherGroupes();
+    }
+
+    function enregistrerGroupes() {
+      try {
+        localStorage.setItem(CLE_GROUPES, JSON.stringify(groupes));
+        return true;
+      } catch (erreur) {
+        return false;
+      }
+    }
+
+    function afficherGroupes() {
+      const liste = document.getElementById("listeGroupes");
+      liste.replaceChildren();
+      document.getElementById("groupesCrees").hidden = groupes.length === 0;
+      groupes.forEach((groupe, index) => {
+        const ligne = document.createElement("li");
+        const texte = document.createElement("span");
+        texte.textContent = groupe.nom + " : " + groupe.photos.length +
+          " photo(s) — " + groupe.photos.map(p => p.nom).join(", ") + " ";
+        const retirer = document.createElement("button");
+        retirer.type = "button";
+        retirer.textContent = "Retirer";
+        retirer.addEventListener("click", () => {
+          if (!confirm("Retirer ce groupe de FaceAlbum ? Les photos originales resteront intactes.")) return;
+          const anciens = groupes.slice();
+          groupes.splice(index, 1);
+          if (!enregistrerGroupes()) {
+            groupes = anciens;
+            alert("Impossible de modifier la sauvegarde sur cet appareil.");
+          }
+          afficherGroupes();
+        });
+        ligne.append(texte, retirer);
+        liste.appendChild(ligne);
+      });
+    }
 
     function nettoyerApercus() {
       urls.forEach(url => URL.revokeObjectURL(url));
@@ -95,9 +143,7 @@
     champPhotos.addEventListener("change", () => {
       nettoyerApercus();
       photosAvecVisage = [];
-      groupes = [];
       confirmation.hidden = true;
-      document.getElementById("groupesCrees").hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
       const photos = Array.from(champPhotos.files);
@@ -149,13 +195,23 @@
         return;
       }
       const nom = document.getElementById("nomGroupe").value.trim() || "Personne sans nom";
-      groupes.push({nom, indices});
-      const ligne = document.createElement("li");
-      ligne.textContent = nom + " : " + indices.length + " photo(s) — " +
-        indices.map(i => "photo " + (i + 1)).join(", ");
-      document.getElementById("listeGroupes").appendChild(ligne);
-      document.getElementById("groupesCrees").hidden = false;
-      reponse.textContent = "✅ Groupe confirmé dans cette session. Aucune photo n'a été déplacée.";
+      const photos = Array.from(champPhotos.files);
+      const groupe = {
+        nom,
+        photos: indices.map(i => ({
+          nom: photos[i].name,
+          taille: photos[i].size,
+          modification: photos[i].lastModified
+        }))
+      };
+      groupes.push(groupe);
+      if (!enregistrerGroupes()) {
+        groupes.pop();
+        reponse.textContent = "⚠️ Sauvegarde impossible sur cet appareil.";
+        return;
+      }
+      afficherGroupes();
+      reponse.textContent = "✅ Groupe enregistré sur cet appareil. Aucune photo n'a été déplacée.";
       choixPhotos.querySelectorAll("input:checked").forEach(c => { c.checked = false; });
     });
 
@@ -167,6 +223,8 @@
       confirmation.hidden = true;
       resultat.textContent += " Regroupement reporté.";
     });
+
+    chargerGroupes();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
