@@ -1,143 +1,178 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FaceAlbum</title>
-<link rel="manifest" href="./manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f6fb;
-      text-align: center;
-      padding: 30px 15px;
-    }
-    h1 { color: #2457a7; }
-    button {
-      background: #2457a7;
-      color: white;
-      padding: 15px;
-      border: 0;
-      border-radius: 12px;
-      font-size: 16px;
-    }
+    body { font-family: Arial, sans-serif; background:#f4f6fb; text-align:center; padding:25px 12px; color:#25334b; }
+    h1 { color:#2457a7; }
+    button { background:#2457a7; color:white; padding:12px 15px; border:0; border-radius:12px; font-size:16px; margin:5px; cursor:pointer; }
+    button:disabled { opacity:.55; }
+    .photos { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin:12px auto; }
+    .photo { display:flex; flex-direction:column; align-items:center; gap:6px; width:110px; font-size:13px; }
+    .photo img { width:105px; height:105px; object-fit:cover; border-radius:10px; }
+    .photo input { width:20px; height:20px; }
+    #confirmation { max-width:650px; margin:22px auto; padding:14px; border:1px solid #ccd7e8; border-radius:14px; background:white; }
+    #nomGroupe { padding:10px; font-size:16px; max-width:90%; }
+    #groupesCrees { max-width:650px; margin:auto; text-align:left; }
   </style>
 </head>
 <body>
   <h1>📸 FaceAlbum</h1>
   <p>Organise tes photos par personne.</p>
-
-  <input type="file"
-         id="photos"
-         accept="image/*"
-         multiple>
-
+  <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
+  <button id="analyser" type="button">🔍 Analyser les photos</button>
+  <p id="resultat" role="status" aria-live="polite"></p>
+  <h3>📸 Photos sélectionnées</h3>
+  <div id="apercu" class="photos"></div>
 
-<button id="analyser" type="button">
-  🔍 Analyser les photos
-</button>
-<p id="resultat"></p>
-<h3>📸 Photos sélectionnées</h3>
-<div id="apercu" style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;"></div>
-  <div id="confirmation" style="display:none; margin-top:25px;">
-  <h3>👥 Confirmation des photos</h3>
-  <p>Ces photos correspondent-elles à la même personne ?</p>
+  <section id="confirmation" hidden>
+    <h3>👥 Créer un groupe de photos</h3>
+    <p><strong>Étape de test :</strong> la reconnaissance automatique des personnes n'est pas encore disponible.</p>
+    <p>Coche les photos qui montrent la même personne, puis confirme ton choix.</p>
+    <div id="choixPhotos" class="photos"></div>
+    <label for="nomGroupe">Nom du groupe (facultatif) :</label>
+    <input id="nomGroupe" type="text" maxlength="60" placeholder="Ex. : Emma">
+    <div>
+      <button id="oui" type="button">✅ Oui, créer le groupe</button>
+      <button id="non" type="button">❌ Non, effacer la sélection</button>
+      <button id="plusTard" type="button">⏳ Plus tard</button>
+    </div>
+    <p id="reponseConfirmation" role="status" aria-live="polite"></p>
+  </section>
+  <section id="groupesCrees" hidden>
+    <h3>📁 Groupes confirmés (dans cette session)</h3>
+    <ul id="listeGroupes"></ul>
+    <p>Les groupes sont seulement affichés ici : aucun fichier n'est déplacé ou renommé.</p>
+  </section>
 
-  <button type="button" onclick="confirmerGroupe('Oui')">✅ Oui</button>
-  <button type="button" onclick="confirmerGroupe('Non')">❌ Non</button>
-  <button type="button" onclick="confirmerGroupe('Plus tard')">⏳ Plus tard</button>
-
-  <p id="reponseConfirmation"></p>
-</div>
+  <script src="./detection.js"></script>
+  <script src="./reconnaissance.js"></script>
   <script>
-function confirmerGroupe(reponse) {
-  const message = document.getElementById("reponseConfirmation");
-
-  if (reponse === "Oui") {
-    message.textContent = "✅ Groupe confirmé !";
-  } else if (reponse === "Non") {
-    message.textContent = "❌ Groupe refusé.";
-  } else {
-    message.textContent = "⏳ Groupe mis en attente.";
-  }
-}
-</script>
-<script src="./detection.js"></script>
-<script src="./reconnaissance.js"></script>
-  <script>
-    document.getElementById("photos")
-      .addEventListener("change", function () {
-const count = this.files.length;
-        const apercu = document.getElementById("apercu");
-apercu.innerHTML = "";
-
-for (const photo of this.files) {
-    const image = document.createElement("img");
-    const url = URL.createObjectURL(photo);
-
-    image.src = url;
-    image.style.width = "100px";
-    image.style.height = "100px";
-    image.style.objectFit = "cover";
-    image.style.borderRadius = "10px";
-
-    image.onload = () => URL.revokeObjectURL(url);
-    apercu.appendChild(image);
-}
-        document.getElementById("message")
-          .textContent = count + " photo(s) sélectionnée(s).";
-      });
-
-document.getElementById("analyser")
-.addEventListener("click", async function () {
-
-
-    const photos = document.getElementById("photos").files;
+    const champPhotos = document.getElementById("photos");
+    const apercu = document.getElementById("apercu");
+    const choixPhotos = document.getElementById("choixPhotos");
+    const confirmation = document.getElementById("confirmation");
     const resultat = document.getElementById("resultat");
+    const reponse = document.getElementById("reponseConfirmation");
+    const boutonAnalyser = document.getElementById("analyser");
+    let urls = [];
+    let photosAvecVisage = [];
+    let groupes = [];
 
-    if (photos.length === 0) {
-      resultat.textContent = "Sélectionne d'abord des photos.";
-      return;
+    function nettoyerApercus() {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      urls = [];
+      apercu.replaceChildren();
+      choixPhotos.replaceChildren();
     }
 
-    
-resultat.textContent = "Analyse en cours...";
+    function vignette(photo, numero, selectionnable) {
+      const boite = document.createElement("label");
+      boite.className = "photo";
+      const image = document.createElement("img");
+      const url = URL.createObjectURL(photo);
+      urls.push(url);
+      image.src = url;
+      image.alt = "Photo " + (numero + 1);
+      boite.appendChild(image);
+      if (selectionnable) {
+        const coche = document.createElement("input");
+        coche.type = "checkbox";
+        coche.value = String(numero);
+        coche.setAttribute("aria-label", "Sélectionner la photo " + (numero + 1));
+        boite.appendChild(coche);
+      }
+      const titre = document.createElement("span");
+      titre.textContent = "Photo " + (numero + 1);
+      boite.appendChild(titre);
+      return boite;
+    }
 
-try {
-  let totalVisages = 0;
-
-  for (const photo of photos) {
-    const analyse = await detecterVisages(photo);
-    totalVisages += analyse.nombre;
-  }
-
-  resultat.textContent =
-    totalVisages + " visage(s) détecté(s) dans " +
-    photos.length + " photo(s).";
-} catch (erreur) {
-  resultat.textContent =
-    "Erreur d'analyse : " + erreur.message;
-}
-
-  });
-
-  </script>
-
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./sw.js")
-        .catch(error => {
-          console.error("Service Worker :", error);
-        });
+    champPhotos.addEventListener("change", () => {
+      nettoyerApercus();
+      photosAvecVisage = [];
+      groupes = [];
+      confirmation.hidden = true;
+      document.getElementById("groupesCrees").hidden = true;
+      reponse.textContent = "";
+      resultat.textContent = "";
+      const photos = Array.from(champPhotos.files);
+      document.getElementById("message").textContent =
+        photos.length ? photos.length + " photo(s) sélectionnée(s)." : "Aucune photo sélectionnée.";
+      photos.forEach((photo, index) => apercu.appendChild(vignette(photo, index, false)));
     });
-  }
-</script>
 
+    boutonAnalyser.addEventListener("click", async () => {
+      const photos = Array.from(champPhotos.files);
+      if (!photos.length) {
+        resultat.textContent = "Sélectionne d'abord des photos.";
+        return;
+      }
+      boutonAnalyser.disabled = true;
+      confirmation.hidden = true;
+      choixPhotos.replaceChildren();
+      reponse.textContent = "";
+      resultat.textContent = "Analyse en cours...";
+      photosAvecVisage = [];
+      try {
+        let total = 0;
+        for (let i = 0; i < photos.length; i++) {
+          resultat.textContent = "Analyse en cours : " + (i + 1) + "/" + photos.length;
+          const analyse = await detecterVisages(photos[i]);
+          total += analyse.nombre;
+          if (analyse.nombre > 0) photosAvecVisage.push({photo: photos[i], index: i});
+        }
+        resultat.textContent = total + " visage(s) détecté(s) dans " + photos.length + " photo(s).";
+        if (photosAvecVisage.length) {
+          photosAvecVisage.forEach(({photo, index}) =>
+            choixPhotos.appendChild(vignette(photo, index, true)));
+          confirmation.hidden = false;
+        } else {
+          resultat.textContent += " Aucun groupe à préparer.";
+        }
+      } catch (erreur) {
+        resultat.textContent = "Erreur d'analyse : " + erreur.message;
+      } finally {
+        boutonAnalyser.disabled = false;
+      }
+    });
 
+    document.getElementById("oui").addEventListener("click", () => {
+      const indices = Array.from(choixPhotos.querySelectorAll('input:checked'))
+        .map(c => Number(c.value));
+      if (!indices.length) {
+        reponse.textContent = "Coche au moins une photo avant de confirmer.";
+        return;
+      }
+      const nom = document.getElementById("nomGroupe").value.trim() || "Personne sans nom";
+      groupes.push({nom, indices});
+      const ligne = document.createElement("li");
+      ligne.textContent = nom + " : " + indices.length + " photo(s) — " +
+        indices.map(i => "photo " + (i + 1)).join(", ");
+      document.getElementById("listeGroupes").appendChild(ligne);
+      document.getElementById("groupesCrees").hidden = false;
+      reponse.textContent = "✅ Groupe confirmé dans cette session. Aucune photo n'a été déplacée.";
+      choixPhotos.querySelectorAll("input:checked").forEach(c => { c.checked = false; });
+    });
+
+    document.getElementById("non").addEventListener("click", () => {
+      choixPhotos.querySelectorAll("input").forEach(c => { c.checked = false; });
+      reponse.textContent = "❌ Sélection effacée. Tu peux choisir d'autres photos.";
+    });
+    document.getElementById("plusTard").addEventListener("click", () => {
+      confirmation.hidden = true;
+      resultat.textContent += " Regroupement reporté.";
+    });
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(console.error);
+      });
+    }
+  </script>
 </body>
 </html>
