@@ -26,7 +26,7 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v9 — groupes de scènes</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v10 — corps et scènes</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -37,6 +37,7 @@
     <p>Suggestions par intelligence artificielle locale : sujets, scènes et apparences visibles. Elles ne prouvent pas qu'il s'agit de la même personne. Vérifie toujours avant de confirmer.</p>
     <div id="listeSuggestions"></div>
     <div id="comparaisonsIA"></div>
+    <div id="comparaisonsCorps"></div>
   </section>
   <section id="confirmation" hidden>
     <h3>👥 Créer un groupe de photos</h3>
@@ -61,6 +62,7 @@
   <script src="./detection.js"></script>
   <script src="./reconnaissance.js"></script>
   <script src="./analyse-ia.js"></script>
+  <script src="./corps.js"></script>
   <script>
     const champPhotos = document.getElementById("photos");
     const apercu = document.getElementById("apercu");
@@ -159,6 +161,7 @@
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
       document.getElementById("comparaisonsIA").replaceChildren();
+      document.getElementById("comparaisonsCorps").replaceChildren();
       confirmation.hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
@@ -186,6 +189,7 @@
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
       document.getElementById("comparaisonsIA").replaceChildren();
+      document.getElementById("comparaisonsCorps").replaceChildren();
       try {
         let total = 0;
         for (let i = 0; i < photos.length; i++) {
@@ -214,6 +218,8 @@
 
           let suggestionsScenes = [];
           let comparaisonsIA = [];
+          let comparaisonsCorps = [];
+          let suggestionsCorps = [];
           let repli = false;
           if (typeof suggererAvecIA !== "function") {
             etatIA.textContent = "❌ Module d'IA absent ou ancienne version en cache. Ferme et rouvre FaceAlbum.";
@@ -247,7 +253,25 @@
             }
           }
 
-          const suggestions = [...suggestionsVisages, ...suggestionsScenes]
+
+          if (typeof analyserApparencesCorps === "function") {
+            try {
+              const bilan = await analyserApparencesCorps(photos, message => {
+                etatIA.textContent = "🧍 " + message;
+              });
+              comparaisonsCorps = bilan.comparaisons;
+              suggestionsCorps = bilan.groupes;
+              etatIA.textContent = "✅ IA scènes terminée. Corps détectés : " +
+                bilan.personnesDetectees + " dans " + bilan.photosAvecCorps +
+                " photo(s). Comparaisons corporelles : " + comparaisonsCorps.length + ".";
+            } catch (erreurCorps) {
+              console.warn("Détection des personnes indisponible", erreurCorps);
+              etatIA.textContent += " ⚠️ Analyse des corps indisponible : " +
+                String(erreurCorps?.message || erreurCorps).slice(0, 140);
+            }
+          }
+
+          const suggestions = [...suggestionsVisages, ...suggestionsCorps, ...suggestionsScenes]
             .filter((s, i, toutes) => toutes.findIndex(t =>
               t.indices.length === s.indices.length &&
               t.indices.every(k => s.indices.includes(k))) === i);
