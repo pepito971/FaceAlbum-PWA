@@ -1,4 +1,4 @@
-const CACHE_NAME = "facealbum-v4";
+const CACHE_NAME = "facealbum-v5";
 const FILES = [
   "./",
   "./index.html",
