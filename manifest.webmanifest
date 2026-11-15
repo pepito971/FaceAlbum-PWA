@@ -1,0 +1,12 @@
+
+{
+  "name": "FaceAlbum",
+  "short_name": "FaceAlbum",
+  "description": "Organiser ses photos par personne",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2457a7"
+}
