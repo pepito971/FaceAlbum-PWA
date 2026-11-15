@@ -1,0 +1,47 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <title>FaceAlbum</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      text-align: center;
+      padding: 30px 15px;
+    }
+    h1 { color: #2457a7; }
+    button {
+      background: #2457a7;
+      color: white;
+      padding: 15px;
+      border: 0;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📸 FaceAlbum</h1>
+  <p>Organise tes photos par personne.</p>
+
+  <input type="file"
+         id="photos"
+         accept="image/*"
+         multiple>
+
+  <p id="message">Aucune photo sélectionnée.</p>
+
+  <script>
+    document.getElementById("photos")
+      .addEventListener("change", function () {
+        const count = this.files.length;
+        document.getElementById("message")
+          .textContent = count + " photo(s) sélectionnée(s).";
+      });
+  </script>
+</body>
+</html>
