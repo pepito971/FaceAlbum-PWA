@@ -14,6 +14,7 @@
     .photo { display:flex; flex-direction:column; align-items:center; gap:6px; width:110px; font-size:13px; }
     .photo img { width:105px; height:105px; object-fit:cover; border-radius:10px; }
     .photo input { width:20px; height:20px; }
+    [hidden] { display:none !important; }
     #confirmation { max-width:650px; margin:22px auto; padding:14px; border:1px solid #ccd7e8; border-radius:14px; background:white; }
     #nomGroupe { padding:10px; font-size:16px; max-width:90%; }
     #groupesCrees { max-width:650px; margin:auto; text-align:left; }
@@ -31,13 +32,13 @@
 
   <section id="suggestions" hidden>
     <h3>🧠 Suggestions de photos proches</h3>
-    <p>Comparaison locale expérimentale : elle repère surtout des visages sur des photos très similaires. Elle ne prouve pas qu'il s'agit de la même personne.</p>
+    <p>Comparaison locale expérimentale des visages, scènes et apparences, y compris les silhouettes visibles. Elle ne permet pas encore d'identifier fiablement une personne.</p>
     <div id="listeSuggestions"></div>
   </section>
   <section id="confirmation" hidden>
     <h3>👥 Créer un groupe de photos</h3>
     <p><strong>Étape de test :</strong> la reconnaissance automatique des personnes n'est pas encore disponible.</p>
-    <p>Coche les photos qui montrent la même personne, puis confirme ton choix.</p>
+    <p>Coche les photos à regrouper (personne, scène ou événement), puis confirme ton choix.</p>
     <div id="choixPhotos" class="photos"></div>
     <label for="nomGroupe">Nom du groupe (facultatif) :</label>
     <input id="nomGroupe" type="text" maxlength="60" placeholder="Ex. : Emma">
@@ -188,17 +189,21 @@
           }
         }
         resultat.textContent = total + " visage(s) détecté(s) dans " + photos.length + " photo(s).";
-        if (photosAvecVisage.length) {
-          photosAvecVisage.forEach(({photo, index}) =>
+        {
+          photos.forEach((photo, index) =>
             choixPhotos.appendChild(vignette(photo, index, true)));
           confirmation.hidden = false;
           try {
             const propositions = await reconnaitrePersonnes(analysesVisages);
             const zone = document.getElementById("listeSuggestions");
-            propositions.groupes.forEach((indices, numero) => {
+            const suggestionsVisages = propositions.groupes.map(indices =>
+              ({indices, raison: "visages très similaires"}));
+            const suggestionsScenes = await suggererScenesEtApparences(photos);
+            const suggestions = [...suggestionsVisages, ...suggestionsScenes];
+            suggestions.forEach(({indices, raison}, numero) => {
               const ligne = document.createElement("div");
               const description = document.createElement("p");
-              description.textContent = "Suggestion " + (numero + 1) + " : " +
+              description.textContent = "Suggestion " + (numero + 1) + " (" + raison + ") : " +
                 indices.map(i => "photo " + (i + 1)).join(", ");
               const bouton = document.createElement("button");
               bouton.type = "button";
@@ -213,14 +218,12 @@
               ligne.append(description, bouton);
               zone.appendChild(ligne);
             });
-            document.getElementById("suggestions").hidden = !propositions.groupes.length;
-            if (!propositions.groupes.length) resultat.textContent +=
+            document.getElementById("suggestions").hidden = !suggestions.length;
+            if (!suggestions.length) resultat.textContent +=
               " Aucune ressemblance forte proposée : le regroupement manuel reste disponible.";
           } catch (erreur) {
             console.warn("Suggestions indisponibles", erreur);
           }
-        } else {
-          resultat.textContent += " Aucun groupe à préparer.";
         }
       } catch (erreur) {
         resultat.textContent = "Erreur d'analyse : " + erreur.message;
@@ -236,7 +239,7 @@
         reponse.textContent = "Coche au moins une photo avant de confirmer.";
         return;
       }
-      const nom = document.getElementById("nomGroupe").value.trim() || "Personne sans nom";
+      const nom = document.getElementById("nomGroupe").value.trim() || "Groupe sans nom";
       const photos = Array.from(champPhotos.files);
       const groupe = {
         nom,
