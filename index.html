@@ -26,7 +26,7 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v11 — personnes et scènes séparées</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v12 — personnes entre scènes différentes</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
@@ -39,6 +39,7 @@
       <h4>👤 Apparence des personnes</h4>
       <p>Visages, corps et vêtements visibles. Des personnes différentes peuvent se ressembler, et une même personne peut changer d'apparence.</p>
       <div id="listePersonnes"></div>
+      <div id="pistesInterScenes"></div>
       <div id="comparaisonsCorps"></div>
     </section>
     <section id="pistesScenes" hidden>
@@ -179,6 +180,7 @@
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
       document.getElementById("listePersonnes").replaceChildren();
+      document.getElementById("pistesInterScenes").replaceChildren();
       document.getElementById("comparaisonsIA").replaceChildren();
       document.getElementById("comparaisonsCorps").replaceChildren();
       document.getElementById("pistesPersonnes").hidden = true;
@@ -302,6 +304,56 @@
           }
 
           const pistesPersonnes = dedoublonner([...suggestionsVisages, ...suggestionsCorps]);
+
+          // Comparer l'apparence des personnes tout en écartant les paires
+          // dont la scène est très similaire. Ces pistes sont exploratoires,
+          // PAS une identification (vêtements et cadrages peuvent tromper).
+          const scenesParPaire = new Map(comparaisonsIA.map(({indices, score}) =>
+            [indices.join(":"), score]));
+          const scoreScene = (a, b) =>
+            scenesParPaire.get([Math.min(a, b), Math.max(a, b)].join(":"));
+          const interScenes = comparaisonsCorps
+            .filter(({indices, score}) => {
+              const scene = scoreScene(...indices);
+              return score >= 0.35 && Number.isFinite(scene) && scene < 0.55;
+            })
+            .slice(0, 5);
+          const zoneInterScenes = document.getElementById("pistesInterScenes");
+          if (interScenes.length) {
+            const titre = document.createElement("h4");
+            titre.textContent = "🔀 Apparences proches dans des scènes différentes";
+            const explication = document.createElement("p");
+            explication.textContent = "Pistes expérimentales : décors différents et apparences visuelles proches. Cela ne prouve pas que c'est la même personne. Les scores ne sont pas des probabilités.";
+            zoneInterScenes.append(titre, explication);
+            interScenes.forEach(({indices, score}) => {
+              const carte = document.createElement("div");
+              carte.style.cssText = "padding:10px;margin:8px auto;border:1px solid #ccd7e8;border-radius:12px;max-width:450px";
+              const legende = document.createElement("p");
+              legende.textContent = "Photos " + (indices[0] + 1) + " et " +
+                (indices[1] + 1) + " — ressemblance d'apparence : " +
+                (score * 100).toFixed(1) + "/100";
+              const images = document.createElement("div");
+              images.className = "photos";
+              indices.forEach(i => images.appendChild(vignette(photos[i], i, false)));
+              const examiner = document.createElement("button");
+              examiner.type = "button";
+              examiner.textContent = "Vérifier si c'est la même personne";
+              examiner.addEventListener("click", () => {
+                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  c.checked = indices.includes(Number(c.value));
+                });
+                document.getElementById("typeGroupe").value = "personne";
+                reponse.textContent = "Piste expérimentale : confirme uniquement si tu reconnais la personne.";
+                confirmation.scrollIntoView({behavior: "smooth"});
+              });
+              carte.append(legende, images, examiner);
+              zoneInterScenes.appendChild(carte);
+            });
+          } else {
+            const vide = document.createElement("p");
+            vide.textContent = "Aucune piste entre scènes différentes avec les seuils actuels. Cela ne signifie pas qu'aucune personne ne se répète.";
+            zoneInterScenes.appendChild(vide);
+          }
           const pistesScenes = dedoublonner(suggestionsScenes);
 
           function afficherPistes(items, zone, type) {
@@ -396,7 +448,7 @@
           }
           const personnes = document.getElementById("pistesPersonnes");
           const scenes = document.getElementById("pistesScenes");
-          personnes.hidden = !pistesPersonnes.length && !comparaisonsCorps.length;
+          personnes.hidden = !pistesPersonnes.length && !comparaisonsCorps.length && !interScenes.length;
           scenes.hidden = !pistesScenes.length && !comparaisonsIA.length;
           document.getElementById("suggestions").hidden = personnes.hidden && scenes.hidden;
           if (!pistesPersonnes.length && !pistesScenes.length) {
