@@ -26,24 +26,41 @@
   <input type="file" id="photos" accept="image/*" multiple>
   <p id="message">Aucune photo sélectionnée.</p>
   <button id="analyser" type="button">🔍 Analyser les photos</button>
-  <p style="font-size:13px;color:#566579">FaceAlbum v10 — corps et scènes</p>
+  <p style="font-size:13px;color:#566579">FaceAlbum v11 — personnes et scènes séparées</p>
   <p id="etatIA" role="status" aria-live="polite" style="max-width:650px;margin:10px auto;padding:10px;background:#e6eefc;border-radius:10px">🧠 IA visuelle : pas encore lancée.</p>
   <p id="resultat" role="status" aria-live="polite"></p>
   <h3>📸 Photos sélectionnées</h3>
   <div id="apercu" class="photos"></div>
 
   <section id="suggestions" hidden>
-    <h3>🧠 Suggestions de photos proches</h3>
-    <p>Suggestions par intelligence artificielle locale : sujets, scènes et apparences visibles. Elles ne prouvent pas qu'il s'agit de la même personne. Vérifie toujours avant de confirmer.</p>
-    <div id="listeSuggestions"></div>
-    <div id="comparaisonsIA"></div>
-    <div id="comparaisonsCorps"></div>
+    <h3>🧠 Pistes proposées par l'IA</h3>
+    <p>Les propositions sont des ressemblances visuelles à vérifier, jamais une identité prouvée.</p>
+    <section id="pistesPersonnes" hidden>
+      <h4>👤 Apparence des personnes</h4>
+      <p>Visages, corps et vêtements visibles. Des personnes différentes peuvent se ressembler, et une même personne peut changer d'apparence.</p>
+      <div id="listePersonnes"></div>
+      <div id="comparaisonsCorps"></div>
+    </section>
+    <section id="pistesScenes" hidden>
+      <h4>🎄 Scènes, sujets et activités</h4>
+      <p>Les photos peuvent montrer un même décor ou une même activité sans représenter la même personne.</p>
+      <div id="listeSuggestions"></div>
+      <div id="comparaisonsIA"></div>
+    </section>
   </section>
   <section id="confirmation" hidden>
     <h3>👥 Créer un groupe de photos</h3>
     <p><strong>Étape de test :</strong> la reconnaissance automatique des personnes n'est pas encore disponible.</p>
     <p>Coche les photos à regrouper (personne, scène ou événement), puis confirme ton choix.</p>
     <div id="choixPhotos" class="photos"></div>
+    <div>
+      <label for="typeGroupe">Ce groupe représente :</label>
+      <select id="typeGroupe" style="padding:10px;font-size:16px;margin:8px;border-radius:8px">
+        <option value="personne">👤 Une personne</option>
+        <option value="evenement">🎄 Une scène ou un événement</option>
+        <option value="sujet">📦 Un sujet ou un objet</option>
+      </select>
+    </div>
     <label for="nomGroupe">Nom du groupe (facultatif) :</label>
     <input id="nomGroupe" type="text" maxlength="60" placeholder="Ex. : Emma">
     <div>
@@ -105,7 +122,8 @@
       groupes.forEach((groupe, index) => {
         const ligne = document.createElement("li");
         const texte = document.createElement("span");
-        texte.textContent = groupe.nom + " : " + groupe.photos.length +
+        const icones = {personne: "👤 ", evenement: "🎄 ", sujet: "📦 "};
+        texte.textContent = (icones[groupe.type] || "📁 ") + groupe.nom + " : " + groupe.photos.length +
           " photo(s) — " + groupe.photos.map(p => p.nom).join(", ") + " ";
         const retirer = document.createElement("button");
         retirer.type = "button";
@@ -160,8 +178,11 @@
       analysesVisages = [];
       document.getElementById("suggestions").hidden = true;
       document.getElementById("listeSuggestions").replaceChildren();
+      document.getElementById("listePersonnes").replaceChildren();
       document.getElementById("comparaisonsIA").replaceChildren();
       document.getElementById("comparaisonsCorps").replaceChildren();
+      document.getElementById("pistesPersonnes").hidden = true;
+      document.getElementById("pistesScenes").hidden = true;
       confirmation.hidden = true;
       reponse.textContent = "";
       resultat.textContent = "";
@@ -190,6 +211,8 @@
       document.getElementById("listeSuggestions").replaceChildren();
       document.getElementById("comparaisonsIA").replaceChildren();
       document.getElementById("comparaisonsCorps").replaceChildren();
+      document.getElementById("pistesPersonnes").hidden = true;
+      document.getElementById("pistesScenes").hidden = true;
       try {
         let total = 0;
         for (let i = 0; i < photos.length; i++) {
@@ -271,29 +294,41 @@
             }
           }
 
-          const suggestions = [...suggestionsVisages, ...suggestionsCorps, ...suggestionsScenes]
-            .filter((s, i, toutes) => toutes.findIndex(t =>
-              t.indices.length === s.indices.length &&
-              t.indices.every(k => s.indices.includes(k))) === i);
-          suggestions.forEach(({indices, raison}, numero) => {
-            const ligne = document.createElement("div");
-            const description = document.createElement("p");
-            description.textContent = "Suggestion " + (numero + 1) + " (" + raison + ") : " +
-              indices.map(i => "photo " + (i + 1)).join(", ") +
-              (indices.length >= 3 ? " — groupe de " + indices.length + " photos" : "");
-            const bouton = document.createElement("button");
-            bouton.type = "button";
-            bouton.textContent = "Examiner cette suggestion";
-            bouton.addEventListener("click", () => {
-              choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
-                c.checked = indices.includes(Number(c.value));
+          function dedoublonner(items) {
+            return items.filter((item, position, tous) =>
+              tous.findIndex(autre =>
+                autre.indices.length === item.indices.length &&
+                autre.indices.every(i => item.indices.includes(i))) === position);
+          }
+
+          const pistesPersonnes = dedoublonner([...suggestionsVisages, ...suggestionsCorps]);
+          const pistesScenes = dedoublonner(suggestionsScenes);
+
+          function afficherPistes(items, zone, type) {
+            items.forEach(({indices, raison}, numero) => {
+              const ligne = document.createElement("div");
+              const description = document.createElement("p");
+              description.textContent = "Piste " + (numero + 1) + " (" + raison + ") : " +
+                indices.map(i => "photo " + (i + 1)).join(", ") +
+                (indices.length >= 3 ? " — groupe de " + indices.length + " photos" : "");
+              const bouton = document.createElement("button");
+              bouton.type = "button";
+              bouton.textContent = "Examiner cette piste";
+              bouton.addEventListener("click", () => {
+                choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                  c.checked = indices.includes(Number(c.value));
+                });
+                document.getElementById("typeGroupe").value = type;
+                reponse.textContent = "Vérifie les photos et le type de groupe avant de confirmer.";
+                confirmation.scrollIntoView({behavior: "smooth"});
               });
-              reponse.textContent = "Vérifie les photos cochées avant de confirmer le groupe.";
-              confirmation.scrollIntoView({behavior: "smooth"});
+              ligne.append(description, bouton);
+              zone.appendChild(ligne);
             });
-            ligne.append(description, bouton);
-            zone.appendChild(ligne);
-          });
+          }
+
+          afficherPistes(pistesPersonnes, document.getElementById("listePersonnes"), "personne");
+          afficherPistes(pistesScenes, document.getElementById("listeSuggestions"), "evenement");
 
           const zoneComparaisons = document.getElementById("comparaisonsIA");
           if (comparaisonsIA.length) {
@@ -319,7 +354,8 @@
                 choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
                   c.checked = indices.includes(Number(c.value));
                 });
-                reponse.textContent = "Ressemblance visuelle seulement : vérifie avant de créer le groupe.";
+                document.getElementById("typeGroupe").value = "evenement";
+                reponse.textContent = "Scène ou sujet similaire seulement : vérifie avant de créer le groupe.";
                 confirmation.scrollIntoView({behavior: "smooth"});
               });
               ligne.append(noms, images, bouton);
@@ -350,17 +386,22 @@
                 choixPhotos.querySelectorAll('input[type="checkbox"]').forEach(c => {
                   c.checked = indices.includes(Number(c.value));
                 });
-                reponse.textContent = "Vérifie la ressemblance avant de confirmer.";
+                document.getElementById("typeGroupe").value = "personne";
+                reponse.textContent = "Apparence corporelle similaire seulement : vérifie avant de confirmer.";
                 confirmation.scrollIntoView({behavior: "smooth"});
               });
               ligne.append(description, images, bouton);
               zoneCorps.appendChild(ligne);
             });
           }
-          document.getElementById("suggestions").hidden =
-            !suggestions.length && !comparaisonsIA.length && !comparaisonsCorps.length;
-          if (!suggestions.length) resultat.textContent +=
-            " Aucune suggestion suffisamment proche : le regroupement manuel reste disponible.";
+          const personnes = document.getElementById("pistesPersonnes");
+          const scenes = document.getElementById("pistesScenes");
+          personnes.hidden = !pistesPersonnes.length && !comparaisonsCorps.length;
+          scenes.hidden = !pistesScenes.length && !comparaisonsIA.length;
+          document.getElementById("suggestions").hidden = personnes.hidden && scenes.hidden;
+          if (!pistesPersonnes.length && !pistesScenes.length) {
+            resultat.textContent += " Pas de groupe proposé automatiquement : les comparaisons sont consultables ci-dessous.";
+          }
         }
       } catch (erreur) {
         resultat.textContent = "Erreur d'analyse : " + erreur.message;
@@ -380,6 +421,7 @@
       const photos = Array.from(champPhotos.files);
       const groupe = {
         nom,
+        type: document.getElementById("typeGroupe").value,
         photos: indices.map(i => ({
           nom: photos[i].name,
           taille: photos[i].size,
