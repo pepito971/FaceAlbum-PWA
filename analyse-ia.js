@@ -128,5 +128,16 @@ async function suggererAvecIA(photos, progression = () => {}) {
       raison: "piste visuelle à vérifier (ressemblance incertaine)"
     });
   }
-  return {groupes, nombrePaires: correspondances.length};
+  // Les scores restent des similarités mathématiques, pas des certitudes.
+  // Les fournir même lorsqu'aucune paire ne franchit le seuil de suggestion.
+  const comparaisons = correspondances.map(({a, b, score}) => ({
+    indices: [a, b],
+    score
+  }));
+  return {
+    groupes,
+    comparaisons,
+    nombrePaires: comparaisons.length,
+    nombrePhotosComparees: representations.filter(Boolean).length
+  };
 }
