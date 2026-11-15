@@ -130,6 +130,59 @@ async function suggererAvecIA(photos, progression = () => {}) {
       raison: "piste visuelle à vérifier (ressemblance incertaine)"
     });
   }
+  // Pistes d'événements : former un ensemble de 3 photos ou plus si
+  // toutes les paires restent visuellement cohérentes.
+  // Seuils expérimentaux : ce ne sont PAS des probabilités d'identité.
+  const pistesGroupes = [];
+  const dejaProposes = new Set();
+  const similarite = new Map();
+  for (const paire of correspondances) {
+    similarite.set(paire.a + ":" + paire.b, paire.score);
+  }
+  const scorePaire = (a, b) =>
+    similarite.get(Math.min(a, b) + ":" + Math.max(a, b)) ?? -1;
+
+  for (const paire of correspondances) {
+    // Une paire solide sert de point de départ. Une simple ressemblance
+    // isolée ne suffit jamais à constituer une piste de groupe.
+    if (paire.score < 0.62) break;
+    if (dejaProposes.has(paire.a) || dejaProposes.has(paire.b)) continue;
+    const indices = [paire.a, paire.b];
+    const candidats = [];
+    for (let k = 0; k < photos.length; k++) {
+      if (indices.includes(k) || dejaProposes.has(k) || !representations[k]) continue;
+      const scores = indices.map(i => scorePaire(i, k));
+      if (scores.every(score => score >= 0.52)) {
+        candidats.push({index: k, moyenne: scores.reduce((a,b)=>a+b,0)/scores.length});
+      }
+    }
+    candidats.sort((a,b)=>b.moyenne-a.moyenne);
+    for (const candidat of candidats) {
+      if (indices.length >= 8) break;
+      const scores = indices.map(i => scorePaire(i, candidat.index));
+      if (scores.every(score => score >= 0.52) &&
+          scores.reduce((a,b)=>a+b,0)/scores.length >= 0.57) {
+        indices.push(candidat.index);
+      }
+    }
+    if (indices.length >= 3) {
+      let totalScore = 0, nombreScores = 0;
+      for (let i = 0; i < indices.length; i++) {
+        for (let j = i + 1; j < indices.length; j++) {
+          totalScore += scorePaire(indices[i], indices[j]);
+          nombreScores++;
+        }
+      }
+      indices.forEach(i => dejaProposes.add(i));
+      pistesGroupes.push({
+        indices: indices.sort((a,b)=>a-b),
+        scoreMoyen: totalScore/nombreScores,
+        raison: "piste de scène ou activité visuellement cohérente — à vérifier"
+      });
+      if (pistesGroupes.length >= 5) break;
+    }
+  }
+
   // Les scores restent des similarités mathématiques, pas des certitudes.
   // Les fournir même lorsqu'aucune paire ne franchit le seuil de suggestion.
   const comparaisons = correspondances.map(({a, b, score}) => ({
@@ -138,6 +191,7 @@ async function suggererAvecIA(photos, progression = () => {}) {
   }));
   return {
     groupes,
+    pistesGroupes,
     comparaisons,
     nombrePaires: comparaisons.length,
     nombrePhotosComparees: representations.filter(Boolean).length,
