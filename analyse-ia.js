@@ -71,12 +71,14 @@ async function suggererAvecIA(photos, progression = () => {}) {
   progression("Chargement du modèle d'analyse visuelle (première utilisation : téléchargement)...");
   const modele = await initialiserModeleVisuel();
   const representations = [];
+  const erreursPhotos = [];
   for (let i = 0; i < photos.length; i++) {
     progression("IA visuelle : photo " + (i + 1) + "/" + photos.length);
     try {
       representations.push(await calculerRepresentationVisuelle(modele, photos[i]));
     } catch (erreur) {
       console.warn("Impossible de comparer la photo " + (i + 1), erreur);
+      erreursPhotos.push("Photo " + (i + 1) + " : " + String(erreur?.message || erreur).slice(0, 180));
       representations.push(null);
     }
     // Permet au téléphone d'actualiser le compteur.
@@ -138,6 +140,7 @@ async function suggererAvecIA(photos, progression = () => {}) {
     groupes,
     comparaisons,
     nombrePaires: comparaisons.length,
-    nombrePhotosComparees: representations.filter(Boolean).length
+    nombrePhotosComparees: representations.filter(Boolean).length,
+    erreursPhotos
   };
 }
